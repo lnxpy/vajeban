@@ -1,0 +1,29 @@
+# Controls how GitHub groups the auto-generated release notes
+# (used by `gh release create --generate-notes` in .github/workflows/release.yml).
+# Pull requests are sorted into sections by their labels; unlabeled ones land
+# in "Other changes".
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+    authors:
+      - dependabot
+  categories:
+    - title: "✨ واژگان نو"
+      labels:
+        - new
+    - title: "✏️ واژگان ویرایش‌ شده"
+      labels:
+        - edit
+    - title: "🐛 تعمیرات"
+      labels:
+        - bug
+    - title: "🛠 بهبودها"
+      labels:
+        - enhancement
+    - title: "📚 مستندات"
+      labels:
+        - documentation
+    - title: " تغییرات دیگر"
+      labels:
+        - "*"

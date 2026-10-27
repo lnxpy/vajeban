@@ -1,0 +1,124 @@
+# Builds the Gboard dictionary and publishes it as a GitHub Release.
+#
+# Cut a release (maintainers):
+#   git tag v0.2.0
+#   git push origin v0.2.0
+#
+# Test without releasing: Actions -> Release -> "Run workflow".
+# Manual runs only build and validate the file and attach it to the run as an
+# artifact; no release is created.
+name: بَرپاشِش
+
+on:
+  push:
+    tags:
+      # Stable versions only (vMAJOR.MINOR.PATCH); pre-release tags are ignored.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Label used in the file name of the test build"
+        required: false
+        default: "dev"
+        type: string
+
+env:
+  # Source CSV and exporter options used for the release file. These reproduce
+  # the v0.1 release (same records; verified by comparing against its contents).
+  # Example with prefix suggestions: EXPORT_ARGS: "--expand-prefixes --min-prefix-length 2"
+  SOURCE_CSV: data/vajeban_extended.csv
+  EXPORT_ARGS: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ساخت واژه‌نامه
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: بررسی اَنباشت‌گاه
+        uses: actions/checkout@v7.0.1
+
+      - name: سامان‌دِهی پایتون
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.15"
+          check-latest: true
+
+      - name: حل کردن نَسْکه
+        id: version
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="${DISPATCH_VERSION:-dev}"
+          fi
+          if [[ ! "$VERSION" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid version label: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: هَزبَری فرهنگ لغت
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$SOURCE_CSV" ]]; then
+            echo "::error::Source CSV not found: $SOURCE_CSV"
+            exit 1
+          fi
+          mkdir -p dist
+          read -r -a export_args <<< "$EXPORT_ARGS"
+          python scripts/gboard_export.py "$SOURCE_CSV" "${export_args[@]}" \
+            -o "dist/vajeban_gboard_${VERSION}.txt"
+
+      - name: اعتبارسنجی بُرونداد
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/validate_export.py "dist/vajeban_gboard_${VERSION}.txt"
+
+      - name: بَوانِش چک سام
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        working-directory: dist
+        run: sha256sum "vajeban_gboard_${VERSION}.txt" > "vajeban_gboard_${VERSION}.txt.sha256"
+
+      - name: بارگُذاری ساخته
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: vajeban-gboard-${{ steps.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: بَرپاشِش نَسْکه گیت‌هاب
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: بارگیری ساخته
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: vajeban-gboard-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: بَوانِش نَسْکه
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            --verify-tag
