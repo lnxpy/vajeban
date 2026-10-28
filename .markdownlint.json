@@ -1,0 +1,11 @@
+{
+  "MD033": {
+    "allowed_elements": ["a", "br", "details", "div", "em", "h1", "img", "p", "strong", "summary"]
+  },
+    "MD041": {
+        "allow_preamble": true
+    },
+    "MD013": {
+        "line_length": 110
+    }
+}
